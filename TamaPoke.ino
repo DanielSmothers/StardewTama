@@ -1144,7 +1144,6 @@ void onSwipeV(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
   if (farmOpen) { farmOpen = false; return; }
-  if (farmOpen) { farmOpen = false; return; }
   if (clockOpen) { clockOpen = false; return; }
   if (cardOpen) {
     if (dir < 0) cardOpen = false;  // arriba cierra la ficha
@@ -1163,11 +1162,6 @@ void onSwipe(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (gameOpen || kbOpen || clockOpen) return;
   if (farmOpen) { int next = (int)farmTab + (dir < 0 ? 1 : -1); farmTab = next < 0 ? 0 : (next > 1 ? 1 : next); farmSelection = 0; ++farmUiRevision; return; }
-  if (farmOpen) {
-    int next = (int)farmTab + (dir < 0 ? 1 : -1);
-    farmTab = next < 0 ? 0 : (next > 1 ? 1 : next);
-    farmSelection = 0; ++farmUiRevision; return;
-  }
   if (cardOpen) {  // dentro de la ficha: cambiar entre las 4 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     cardPage = p < 0 ? 0 : (p > 3 ? 3 : p);
@@ -1212,37 +1206,6 @@ void onTap(int16_t x, int16_t y) {
         break;
       }
     }
-    return;
-  }
-  if (farmOpen) {
-    if (y >= 100 && y <= 160) {
-      if (x < CX) farmTab = ANIMAL_FARM; else farmTab = ANIMAL_RESERVE;
-      farmSelection = 0; ++farmUiRevision; return;
-    }
-    if (y >= 172 && y <= 350) {
-      uint8_t slot = (uint8_t)((y - 172) / 58);
-      uint8_t seen = 0;
-      for (uint8_t i = 0; i < farmAnimals.count(); ++i) {
-        const AnimalInstance *a = farmAnimals.at(i);
-        if (a && a->displayGroup == farmTab) {
-          if (seen++ == slot) { farmSelection = i; ++farmUiRevision; return; }
-        }
-      }
-    }
-    if (y >= 365 && y <= 440) {
-      const AnimalInstance *selected = nullptr;
-      uint8_t seen = 0;
-      for (uint8_t i = 0; i < farmAnimals.count(); ++i) {
-        const AnimalInstance *a = farmAnimals.at(i);
-        if (a && a->displayGroup == farmTab && seen++ == farmSelection) { selected = a; break; }
-      }
-      if (selected) {
-        AnimalDisplayGroup target = farmTab == ANIMAL_FARM ? ANIMAL_RESERVE : ANIMAL_FARM;
-        if (farmAnimals.move(selected->instanceId, target)) { farmTab = target; farmSelection = 0; ++farmUiRevision; sfxPlay(SFX_TAP); }
-      }
-      return;
-    }
-    if (y < 90) { farmOpen = false; return; }
     return;
   }
   if (farmOpen) { farmCollectionTap(x, y); return; }
@@ -1616,6 +1579,77 @@ void printT(const char *s) {
     gfx->setCursor(x + 1, y);
   }
   gfx->print(s);
+}
+
+// Farm collection UI: the model owns state; this screen only selects and moves instances.
+static const char *farmSpeciesName(uint16_t id) {
+  switch (id) {
+    case FARM_CHICKEN: return "Chicken"; case FARM_COW: return "Cow";
+    case FARM_DUCK: return "Duck"; case FARM_GOAT: return "Goat";
+    case FARM_RABBIT: return "Rabbit"; case FARM_SHEEP: return "Sheep";
+    case FARM_PIG: return "Pig"; case FARM_DINOSAUR: return "Dinosaur";
+    case FARM_CAT: return "Cat"; case FARM_DOG: return "Dog";
+    default: return "Animal";
+  }
+}
+static const AnimalInstance *farmVisibleAt(uint8_t slot) {
+  uint8_t seen = 0;
+  for (uint8_t i = 0; i < farmAnimals.count(); ++i) {
+    const AnimalInstance *a = farmAnimals.at(i);
+    if (a && a->displayGroup == farmTab && seen++ == slot) return a;
+  }
+  return nullptr;
+}
+void farmCollectionTap(int16_t x, int16_t y) {
+  if (y < 88) { farmOpen = false; return; }
+  if (y >= 100 && y <= 158) {
+    farmTab = x < CX ? ANIMAL_FARM : ANIMAL_RESERVE;
+    farmSelection = 0; ++farmUiRevision; return;
+  }
+  if (y >= 166 && y < 342) {
+    uint8_t slot = (uint8_t)((y - 166) / 44);
+    if (slot < 4 && farmVisibleAt(slot)) { farmSelection = slot; ++farmUiRevision; }
+    return;
+  }
+  if (y >= 366 && y <= 440) {
+    const AnimalInstance *a = farmVisibleAt(farmSelection);
+    if (a) {
+      AnimalDisplayGroup target = farmTab == ANIMAL_FARM ? ANIMAL_RESERVE : ANIMAL_FARM;
+      if (farmAnimals.move(a->instanceId, target)) {
+        farmTab = target; farmSelection = 0; ++farmUiRevision; sfxPlay(SFX_TAP);
+      }
+    }
+  }
+}
+void renderFarmCollection() {
+  gfx->fillScreen(RGB565_BLACK); fillBackdrop(UI_BG_DAY);
+  gfx->setTextColor(UI_INK); setSize(3); setCur(centerX("ANIMALS", 3), 48); printT("ANIMALS");
+  gfx->setTextColor(UI_INK); setSize(1); setCur(24 + UI_DX, 78); printT("Tap an animal, then move it");
+  const uint8_t farmCount = farmAnimals.countIn(ANIMAL_FARM);
+  const uint8_t reserveCount = farmAnimals.countIn(ANIMAL_RESERVE);
+  gfx->fillRoundRect(28 + UI_DX, 100, 198, 52, 12, farmTab == ANIMAL_FARM ? UI_BAR_OK : UI_TRACK);
+  gfx->fillRoundRect(240 + UI_DX, 100, 198, 52, 12, farmTab == ANIMAL_RESERVE ? UI_BAR_OK : UI_TRACK);
+  char label[28];
+  snprintf(label, sizeof(label), "FARM  %u", farmCount); gfx->setTextColor(UI_INK); setSize(2); setCur(64 + UI_DX, 119); printT(label);
+  snprintf(label, sizeof(label), "RESERVE  %u", reserveCount); gfx->setTextColor(UI_INK); setSize(2); setCur(257 + UI_DX, 119); printT(label);
+  for (uint8_t slot = 0; slot < 4; ++slot) {
+    int y = 166 + slot * 44;
+    const AnimalInstance *a = farmVisibleAt(slot);
+    gfx->fillRoundRect(32 + UI_DX, y, 402, 38, 9, (slot == farmSelection) ? 0xD6F2 : UI_WHITE);
+    gfx->drawRoundRect(32 + UI_DX, y, 402, 38, 9, UI_TRACK);
+    if (a) {
+      gfx->fillCircle(55 + UI_DX, y + 19, 12, a->variant ? UI_BAR_WARN : UI_BAR_OK);
+      gfx->setTextColor(UI_INK); setSize(2); setCur(80 + UI_DX, y + 12);
+      printT(a->nickname[0] ? a->nickname : farmSpeciesName(a->speciesId));
+      char stats[32]; snprintf(stats, sizeof(stats), "AGE %lu  FRIEND %u", (unsigned long)(a->ageMinutes / 1440), a->friendship);
+      setSize(1); setCur(280 + UI_DX, y + 15); printT(stats);
+    } else { gfx->setTextColor(UI_TRACK); setSize(1); setCur(80 + UI_DX, y + 15); printT("Empty slot"); }
+  }
+  const AnimalInstance *selected = farmVisibleAt(farmSelection);
+  const char *action = farmTab == ANIMAL_FARM ? "MOVE TO RESERVE" : "MOVE TO FARM";
+  gfx->fillRoundRect(82 + UI_DX, 366, 302, 58, 14, selected ? UI_BAR_OK : UI_TRACK);
+  gfx->setTextColor(UI_WHITE); setSize(2); setCur(centerX(action, 2), 386); printT(action);
+  gfx->setTextColor(UI_INK); setSize(1); setCur(centerX("Swipe to switch tabs  |  Tap top to exit", 1), 440); printT("Swipe to switch tabs  |  Tap top to exit");
 }
 
 // Pantallas que solo cambian con un toque (o con un dato que cambia muy de vez en cuando):
