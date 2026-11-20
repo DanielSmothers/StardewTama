@@ -1621,6 +1621,31 @@ void farmCollectionTap(int16_t x, int16_t y) {
     }
   }
 }
+static void drawFarmAnimalIcon(const AnimalInstance *a, int x, int y) {
+  if (!a) return;
+  uint16_t coat = a->variant ? UI_BAR_WARN : 0xD5B2;
+  if (a->speciesId == FARM_CHICKEN || a->speciesId == FARM_DUCK) coat = a->speciesId == FARM_DUCK ? 0x7E3D : 0xFED2;
+  if (a->speciesId == FARM_COW || a->speciesId == FARM_GOAT || a->speciesId == FARM_SHEEP) coat = 0xFFFF;
+  if (a->speciesId == FARM_PIG) coat = 0xF454;
+  if (a->speciesId == FARM_DINOSAUR) coat = 0x5DCD;
+  gfx->fillRoundRect(x - 10, y + 1, 19, 12, 4, coat);
+  gfx->fillCircle(x + 7, y - 4, 6, coat);
+  gfx->fillRect(x - 7, y + 11, 3, 5, UI_INK);
+  gfx->fillRect(x + 3, y + 11, 3, 5, UI_INK);
+  gfx->fillCircle(x + 9, y - 5, 1, UI_INK);
+  if (a->speciesId == FARM_CHICKEN || a->speciesId == FARM_DUCK) {
+    gfx->fillTriangle(x + 12, y - 3, x + 18, y, x + 12, y + 2, UI_BAR_WARN);
+    gfx->fillCircle(x + 4, y - 10, 3, UI_BAR_BAD);
+  } else if (a->speciesId == FARM_CAT || a->speciesId == FARM_DOG) {
+    gfx->fillTriangle(x + 2, y - 8, x + 4, y - 17, x + 9, y - 9, coat);
+    gfx->fillTriangle(x + 8, y - 9, x + 13, y - 17, x + 14, y - 6, coat);
+  } else if (a->speciesId == FARM_PIG) {
+    gfx->fillRoundRect(x + 10, y - 2, 7, 5, 2, 0xF454);
+  } else if (a->speciesId == FARM_COW) {
+    gfx->fillTriangle(x + 3, y - 8, x + 1, y - 14, x + 7, y - 9, UI_WHITE);
+    gfx->fillTriangle(x + 9, y - 9, x + 14, y - 14, x + 13, y - 5, UI_WHITE);
+  }
+}
 void renderFarmCollection() {
   gfx->fillScreen(RGB565_BLACK); fillBackdrop(UI_BG_DAY);
   gfx->setTextColor(UI_INK); setSize(3); setCur(centerX("ANIMALS", 3), 48); printT("ANIMALS");
@@ -1638,7 +1663,7 @@ void renderFarmCollection() {
     gfx->fillRoundRect(32 + UI_DX, y, 402, 38, 9, (slot == farmSelection) ? 0xD6F2 : UI_WHITE);
     gfx->drawRoundRect(32 + UI_DX, y, 402, 38, 9, UI_TRACK);
     if (a) {
-      gfx->fillCircle(55 + UI_DX, y + 19, 12, a->variant ? UI_BAR_WARN : UI_BAR_OK);
+      drawFarmAnimalIcon(a, 55 + UI_DX, y + 19);
       gfx->setTextColor(UI_INK); setSize(2); setCur(80 + UI_DX, y + 12);
       printT(a->nickname[0] ? a->nickname : farmSpeciesName(a->speciesId));
       char stats[32]; snprintf(stats, sizeof(stats), "AGE %lu  FRIEND %u", (unsigned long)(a->ageMinutes / 1440), a->friendship);
