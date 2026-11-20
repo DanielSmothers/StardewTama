@@ -43,7 +43,6 @@ bool AnimalCollection::save() {
   blob.count = count_;
   blob.nextId = nextId_;
   memcpy(blob.animals, animals_, sizeof(animals_));
-  prefs_.begin("stardew", false);
   return prefs_.putBytes("animals", &blob, sizeof(blob)) == sizeof(blob);
 }
 
