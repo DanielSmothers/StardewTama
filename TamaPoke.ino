@@ -549,8 +549,6 @@ void setup() {
   farmAnimals.load();
   if (farmAnimals.count() == 0) {
     farmAnimals.add(FARM_CHICKEN, ANIMAL_FARM);
-    farmAnimals.add(FARM_COW, ANIMAL_FARM);
-    farmAnimals.add(FARM_DUCK, ANIMAL_RESERVE);
   }
   sdBegin();  // debe ir despues de gfx->begin(): en Guition el SD comparte SCK/MOSI con la pantalla
   thumbs.load();
