@@ -40,6 +40,7 @@
 #include "species.h"
 #include "dex.h"
 #include "pet.h"
+#include "animal.h"
 #include "sdmon.h"
 #include "rtcbat.h"
 #include "i18n.h"
@@ -153,6 +154,11 @@ TouchDrvCST92xx touch;
 // soporte de japones/coreano/chino (ver PR #13)
 bool gCjkFont = false;
 Pet pet;
+AnimalCollection farmAnimals;
+bool farmOpen = false;
+uint8_t farmTab = ANIMAL_FARM;
+uint8_t farmSelection = 0;
+uint32_t farmUiRevision = 0;
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
 SdMon mon;          // sprite B/N (respaldo y minijuego si no hay PMD)
@@ -538,6 +544,12 @@ void setup() {
 #endif
 
   pet.begin();
+  farmAnimals.load();
+  if (farmAnimals.count() == 0) {
+    farmAnimals.add(FARM_CHICKEN, ANIMAL_FARM);
+    farmAnimals.add(FARM_COW, ANIMAL_FARM);
+    farmAnimals.add(FARM_DUCK, ANIMAL_RESERVE);
+  }
   sdBegin();  // debe ir despues de gfx->begin(): en Guition el SD comparte SCK/MOSI con la pantalla
   thumbs.load();
 
@@ -1131,6 +1143,8 @@ void openClock();  // prototipo
 void onSwipeV(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
+  if (farmOpen) { farmOpen = false; return; }
+  if (farmOpen) { farmOpen = false; return; }
   if (clockOpen) { clockOpen = false; return; }
   if (cardOpen) {
     if (dir < 0) cardOpen = false;  // arriba cierra la ficha
@@ -1148,6 +1162,12 @@ void onSwipeV(int dir) {
 void onSwipe(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (gameOpen || kbOpen || clockOpen) return;
+  if (farmOpen) { int next = (int)farmTab + (dir < 0 ? 1 : -1); farmTab = next < 0 ? 0 : (next > 1 ? 1 : next); farmSelection = 0; ++farmUiRevision; return; }
+  if (farmOpen) {
+    int next = (int)farmTab + (dir < 0 ? 1 : -1);
+    farmTab = next < 0 ? 0 : (next > 1 ? 1 : next);
+    farmSelection = 0; ++farmUiRevision; return;
+  }
   if (cardOpen) {  // dentro de la ficha: cambiar entre las 4 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     cardPage = p < 0 ? 0 : (p > 3 ? 3 : p);
@@ -1194,6 +1214,38 @@ void onTap(int16_t x, int16_t y) {
     }
     return;
   }
+  if (farmOpen) {
+    if (y >= 100 && y <= 160) {
+      if (x < CX) farmTab = ANIMAL_FARM; else farmTab = ANIMAL_RESERVE;
+      farmSelection = 0; ++farmUiRevision; return;
+    }
+    if (y >= 172 && y <= 350) {
+      uint8_t slot = (uint8_t)((y - 172) / 58);
+      uint8_t seen = 0;
+      for (uint8_t i = 0; i < farmAnimals.count(); ++i) {
+        const AnimalInstance *a = farmAnimals.at(i);
+        if (a && a->displayGroup == farmTab) {
+          if (seen++ == slot) { farmSelection = i; ++farmUiRevision; return; }
+        }
+      }
+    }
+    if (y >= 365 && y <= 440) {
+      const AnimalInstance *selected = nullptr;
+      uint8_t seen = 0;
+      for (uint8_t i = 0; i < farmAnimals.count(); ++i) {
+        const AnimalInstance *a = farmAnimals.at(i);
+        if (a && a->displayGroup == farmTab && seen++ == farmSelection) { selected = a; break; }
+      }
+      if (selected) {
+        AnimalDisplayGroup target = farmTab == ANIMAL_FARM ? ANIMAL_RESERVE : ANIMAL_FARM;
+        if (farmAnimals.move(selected->instanceId, target)) { farmTab = target; farmSelection = 0; ++farmUiRevision; sfxPlay(SFX_TAP); }
+      }
+      return;
+    }
+    if (y < 90) { farmOpen = false; return; }
+    return;
+  }
+  if (farmOpen) { farmCollectionTap(x, y); return; }
   if (galleryOpen) {
     galleryTap(x, y);
     return;
@@ -1256,6 +1308,7 @@ void onTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
+  if (x >= LCD_WIDTH - 118 && x <= LCD_WIDTH - 18 && y >= 22 && y <= 78) { farmOpen = true; farmTab = ANIMAL_FARM; farmSelection = 0; ++farmUiRevision; return; }
   // boton de evolucion: abre el dialogo evolucionar/mantener
   if (pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
       y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) {
@@ -1569,6 +1622,7 @@ void printT(const char *s) {
 // mientras su "clave" no cambie no se repintan ni se vuelcan por QSPI.
 static bool staticScreen() {
   if (pet.awaitingStarter()) return true;
+  if (farmOpen) return true;
   if (galleryOpen || gameOpen || sackOpen) return false;  // la galeria gestiona su propio repintado
   if (kbOpen || clockOpen) return true;
   return cardOpen && cardPage != 0;  // la pagina 0 tiene el retrato animado
@@ -1576,7 +1630,8 @@ static bool staticScreen() {
 static uint32_t mixKey(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t screenKey() {
   uint32_t h = 2166136261u;
-  h = mixKey(h, pet.awaitingStarter() ? 1 : kbOpen ? 2 : clockOpen ? 3 : 4 + cardPage);
+  h = mixKey(h, farmOpen ? 40 + farmTab : pet.awaitingStarter() ? 1 : kbOpen ? 2 : clockOpen ? 3 : 4 + cardPage);
+  if (farmOpen) { h = mixKey(h, farmUiRevision); h = mixKey(h, farmAnimals.count()); }
   h = mixKey(h, sdEpoch);
   if (kbOpen) {
     h = mixKey(h, nameLen);
@@ -1624,6 +1679,7 @@ bool render() {
     renderStarterSelect();
     return true;
   }
+  if (farmOpen) { renderFarmCollection(); return true; }
   if (galleryOpen) {
     renderGallery();
     return true;
@@ -1693,6 +1749,8 @@ bool render() {
     const char *base = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
     snprintf(name, sizeof(name), T(S_NAME_FMT), pet.shiny ? "*" : "", base, pet.level());
     drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
+    gfx->fillRoundRect(LCD_WIDTH - 112, 28, 88, 42, 12, UI_BAR_OK);
+    gfx->setTextColor(UI_WHITE); setSize(1); setCur(LCD_WIDTH - 104, 43); printT("FARM");
     drawStreakBadge();
     drawPet();
     drawBath();
