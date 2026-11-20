@@ -159,6 +159,8 @@ bool farmOpen = false;
 uint8_t farmTab = ANIMAL_FARM;
 uint8_t farmSelection = 0;
 uint32_t farmUiRevision = 0;
+void farmCollectionTap(int16_t x, int16_t y);
+void renderFarmCollection();
 
 // sprite animado de la SD para la especie actual (si existe el archivo)
 SdMon mon;          // sprite B/N (respaldo y minijuego si no hay PMD)
