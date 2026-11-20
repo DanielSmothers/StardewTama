@@ -11,6 +11,7 @@ static const uint8_t ANIMAL_COLLECTION_CAPACITY = 24;
 static const uint8_t ANIMAL_NICKNAME_CAPACITY = 16;
 
 enum AnimalDisplayGroup : uint8_t { ANIMAL_FARM = 0, ANIMAL_RESERVE = 1 };
+enum FarmSpeciesId : uint16_t { FARM_CHICKEN = 1, FARM_COW = 2, FARM_DUCK = 3, FARM_GOAT = 4, FARM_RABBIT = 5, FARM_SHEEP = 6, FARM_PIG = 7, FARM_DINOSAUR = 8, FARM_CAT = 9, FARM_DOG = 10 };
 
 struct AnimalInstance {
   uint32_t instanceId = 0;
